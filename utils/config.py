@@ -19,7 +19,7 @@ class AppConfig:
 
     def get_bot_key(self):
         main_section = self.config['main']
-        return main_section['bot_token']
+        return main_section['bot_staff_token']
 
     def get_config_dir(self):
         return self.cfg_dir
