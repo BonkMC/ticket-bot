@@ -1,18 +1,23 @@
-from utils import config
+import interactions
+import json
+from utils import config, tickethandler
 from interactions import Client, check, SlashContext
-import os
 
-
+ticket_handler = tickethandler.TicketHandler()
 AppConfig_obj = config.AppConfig()
-token = AppConfig_obj.get_bonk_staff_key()
-bot = Client(token=token, sync_interactions=True)
+token = AppConfig_obj.get_bot_key()
+bot = Client(token=token, sync_interactions=True, intents=interactions.Intents.DEFAULT | interactions.Intents.MESSAGE_CONTENT)
 
-
-
-# Example role check function, make sure to change the role IDs.
-CHECK_ROLES = [1111111111111111111, 2222222222222222222]
-def role_check():
+def staff_role_check(exclude: list = [], exclude_acts_as_include: bool = False):
     async def predicate(ctx: SlashContext):
+        with open('data/roleslist.json') as f:
+            roles_dict = json.load(f)
+        check_roles = []
+        for role, (a, b) in roles_dict.items():
+            if not exclude_acts_as_include and role in exclude:
+                continue
+            check_roles.extend((a, b))
         user_roles = [int(i.id) for i in ctx.author.roles]
-        return any(role_id in user_roles for role_id in CHECK_ROLES)
+        return any(role_id in user_roles for role_id in check_roles)
+
     return check(predicate)
