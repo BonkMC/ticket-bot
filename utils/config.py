@@ -21,6 +21,9 @@ class AppConfig:
         main_section = self.config['main']
         return main_section['bonk_staff_token']
 
+    def get_openai_key(self):
+        openai_section = self.config['main']
+        return openai_section['openai_key']
 
     def get_config_dir(self):
         return self.cfg_dir

@@ -179,6 +179,10 @@ class TicketHandler:
     def list_tickets(self) -> list:
         return list(self.tickets.values())
 
+    # NEW: Helper method to check if a user already has an open ticket.
+    def has_open_ticket(self, user_id: str) -> bool:
+        return any(ticket.user_id == user_id and ticket.status == "open" for ticket in self.tickets.values())
+
 
 # Example usage:
 if __name__ == "__main__":

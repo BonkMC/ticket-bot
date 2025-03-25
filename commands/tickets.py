@@ -1,5 +1,4 @@
 import atexit
-import asyncio
 from interactions import (
     slash_command,
     slash_option,
@@ -18,11 +17,13 @@ from interactions import (
     ShortText,
     ParagraphText
 )
-from bot_instance import bot, ticket_handler  # ticket_handler is already imported
-from utils import colors
+from bot_instance import bot, ticket_handler, AppConfig_obj
+from utils import colors, gptchatter
 
 # Save tickets on program exit
 atexit.register(ticket_handler.save)
+
+chatter = gptchatter.GPTChatterDB(AppConfig_obj.get_openai_key())
 
 # Define your support staff role ID (replace with your actual role ID)
 SUPPORT_ROLE_ID = 123456789012345678
@@ -85,7 +86,7 @@ async def handle_ticket_select(ctx: ComponentContext):
         ShortText(label="What is your in game name?", custom_id="ign"),
         ParagraphText(label="Why are you making a ticket?", custom_id="reason"),
         title="Ticket Details",
-        custom_id="ticket_modal"  # <-- Unique custom_id added
+        custom_id="ticket_modal"
     )
     await ctx.send_modal(modal=my_modal)
 
@@ -93,6 +94,11 @@ async def handle_ticket_select(ctx: ComponentContext):
     modal_ctx = await ctx.bot.wait_for_modal(my_modal)
     ign = modal_ctx.responses["ign"]
     reason_input = modal_ctx.responses["reason"]
+
+    # Check if the user already has an open ticket.
+    if ticket_handler.has_open_ticket(str(ctx.author.id)):
+        await modal_ctx.send("You already have an open ticket.", ephemeral=True)
+        return
 
     # Continue with your ticket creation process using the stored category.
     ticket_id = ticket_handler._generate_ticket_id()
@@ -130,6 +136,9 @@ async def handle_ticket_select(ctx: ComponentContext):
         category=ticket_category
     )
 
+    # Initialize a GPT conversation for this ticket using its ticket id.
+    chatter.add_user(ticket.ticket_id)
+
     welcome_embed = Embed(
         title="Ticket Opened",
         description=(
@@ -152,7 +161,7 @@ async def handle_ticket_select(ctx: ComponentContext):
     buttons_row = ActionRow(close_button)
     await new_channel.send(components=[buttons_row])
 
-    # Use the modal context to send a follow-up message (do not use ctx.send after sending a modal)
+    # Use the modal context to send a follow-up message.
     await modal_ctx.send(
         embed=Embed(
             title="Ticket Created",
@@ -234,6 +243,8 @@ async def close_ticket_callback(ctx: ComponentContext):
     )
     await ctx.channel.send(embed=close_embed, components=[action_row])
     await ctx.send("Ticket closed successfully.", ephemeral=True)
+    # Remove the GPT conversation from storage now that the ticket is closed.
+    chatter.delete_user(ticket.ticket_id)
 
 
 @component_callback("reopen_ticket")
@@ -313,18 +324,16 @@ async def delete_ticket_callback(ctx: ComponentContext):
     await ctx.channel.delete()
 
 
-# Event listener to log every user message in ticket channels.
+# Event listener to log every user message in ticket channels and interact with GPT.
 @bot.listen("on_message_create")
 async def log_ticket_message(event):
     msg = event.message
-    # Attempt to get the content from the message attributes or raw data.
+    # Determine message content.
     content = ""
     if hasattr(msg, "content") and msg.content:
         content = msg.content
     elif hasattr(msg, "data") and msg.data.get("content"):
         content = msg.data.get("content")
-
-    # If still empty, try attachments; otherwise log a placeholder.
     if not content:
         if hasattr(msg, "attachments") and msg.attachments:
             attachment_urls = ", ".join(att.url for att in msg.attachments)
@@ -332,7 +341,7 @@ async def log_ticket_message(event):
         else:
             content = "[No message content]"
 
-    # Get the author from either msg.author or msg.member.
+    # Get the author; ignore bot messages.
     author = getattr(msg, "author", None) or msg.member
     if not author or getattr(author, "bot", False):
         return
@@ -340,12 +349,25 @@ async def log_ticket_message(event):
     # Check if this channel is a ticket channel.
     for ticket in ticket_handler.tickets.values():
         if ticket.channel_id == str(msg.channel.id):
+            # Log the message as before.
             ticket_handler.add_ticket_log_with_user(
                 ticket.ticket_id,
                 str(author.id),
                 author.username,
                 content
             )
+            # If the message is from the ticket owner and the ticket is open, call GPT.
+            if ticket.user_id == str(author.id) and ticket.status == "open":
+                chat_obj = chatter.get_user(ticket.ticket_id)
+                if not chat_obj:
+                    chat_obj = chatter.add_user(ticket.ticket_id)
+                # Trigger typing indicator while generating the GPT response.
+                await msg.channel.trigger_typing()
+                answer = chat_obj.chat_with_gpt(content)
+                try:
+                    await msg.reply(answer)
+                except Exception as e:
+                    print("Error sending GPT reply:", e)
             break
 
 
@@ -411,3 +433,5 @@ async def close_ticket_command(ctx: SlashContext):
     )
     await ctx.channel.send(embed=close_embed, components=[action_row])
     await ctx.send("Ticket closed successfully.", ephemeral=True)
+    # Remove the GPT conversation from storage.
+    chatter.delete_user(ticket.ticket_id)
