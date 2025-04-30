@@ -1,0 +1,238 @@
+{
+    "001": {
+        "ticket_id": "001",
+        "user_id": "627980371887128606",
+        "channel_id": "deleted",
+        "subject": "General Ticket \ud83c\udf88 Ticket",
+        "reason": "bug is there",
+        "category": "General Ticket \ud83c\udf88",
+        "ign": {
+            "username": "PyroEdged"
+        },
+        "status": "closed",
+        "created_at": "2025-04-30T03:20:41.840440+00:00",
+        "updated_at": "2025-04-30T03:24:17.365219+00:00",
+        "logs": [
+            {
+                "timestamp": "2025-04-30T03:20:51.521544+00:00",
+                "message": "[pyroedged (627980371887128606)]: help theres a bug"
+            },
+            {
+                "timestamp": "2025-04-30T03:21:39.999675+00:00",
+                "message": "[pyroedged (627980371887128606)]: RTP queue isnt working"
+            },
+            {
+                "timestamp": "2025-04-30T03:23:00.259990+00:00",
+                "message": "[pyroedged (627980371887128606)]: thats not very helpfukl it says there was an error while running this command"
+            },
+            {
+                "timestamp": "2025-04-30T03:23:35.601633+00:00",
+                "message": "[pyroedged (627980371887128606)]: 1) Yes\n2) Yes, everyone else in the server is having the same issue\n3) no"
+            },
+            {
+                "timestamp": "2025-04-30T03:24:10.729188+00:00",
+                "message": "Ticket closed: Closed by <@627980371887128606>"
+            },
+            {
+                "timestamp": "2025-04-30T03:24:17.365219+00:00",
+                "message": "[pyroedged (627980371887128606)]: Ticket channel deleted."
+            }
+        ]
+    },
+    "002": {
+        "ticket_id": "002",
+        "user_id": "627980371887128606",
+        "channel_id": "deleted",
+        "subject": "Appeal Ticket \ud83d\udcdc Ticket",
+        "reason": "I got banned",
+        "category": "Appeal Ticket \ud83d\udcdc",
+        "ign": {
+            "username": "PyroEdged"
+        },
+        "status": "closed",
+        "created_at": "2025-04-30T03:24:38.075171+00:00",
+        "updated_at": "2025-04-30T03:26:28.096398+00:00",
+        "logs": [
+            {
+                "timestamp": "2025-04-30T03:24:45.073507+00:00",
+                "message": "[pyroedged (627980371887128606)]: i got banned unban me"
+            },
+            {
+                "timestamp": "2025-04-30T03:26:25.525568+00:00",
+                "message": "Ticket closed: Closed by <@627980371887128606>"
+            },
+            {
+                "timestamp": "2025-04-30T03:26:28.095382+00:00",
+                "message": "[pyroedged (627980371887128606)]: Ticket channel deleted."
+            }
+        ]
+    },
+    "003": {
+        "ticket_id": "003",
+        "user_id": "627980371887128606",
+        "channel_id": "deleted",
+        "subject": "Appeal Ticket \ud83d\udcdc Ticket",
+        "reason": "I got banned",
+        "category": "Appeal Ticket \ud83d\udcdc",
+        "ign": {
+            "username": "PyroEdged"
+        },
+        "status": "closed",
+        "created_at": "2025-04-30T03:32:11.367372+00:00",
+        "updated_at": "2025-04-30T03:42:54.299985+00:00",
+        "logs": [
+            {
+                "timestamp": "2025-04-30T03:32:30.071735+00:00",
+                "message": "[pyroedged (627980371887128606)]: I got banned unban me"
+            },
+            {
+                "timestamp": "2025-04-30T03:32:52.600811+00:00",
+                "message": "[pyroedged (627980371887128606)]: bro i didnt even cheat this dumbass banned me"
+            },
+            {
+                "timestamp": "2025-04-30T03:33:16.320728+00:00",
+                "message": "[pyroedged (627980371887128606)]: just ping a staff i want to talk to a real human benig"
+            },
+            {
+                "timestamp": "2025-04-30T03:42:51.945333+00:00",
+                "message": "Ticket closed: Closed by <@627980371887128606>"
+            },
+            {
+                "timestamp": "2025-04-30T03:42:54.298977+00:00",
+                "message": "[pyroedged (627980371887128606)]: Ticket channel deleted."
+            }
+        ]
+    },
+    "004": {
+        "ticket_id": "004",
+        "user_id": "627980371887128606",
+        "channel_id": "deleted",
+        "subject": "Appeal Ticket \ud83d\udcdc Ticket",
+        "reason": "test",
+        "category": "Appeal Ticket \ud83d\udcdc",
+        "ign": {
+            "username": "PyroEdged"
+        },
+        "status": "closed",
+        "created_at": "2025-04-30T04:09:41.950545+00:00",
+        "updated_at": "2025-04-30T04:09:50.813547+00:00",
+        "logs": [
+            {
+                "timestamp": "2025-04-30T04:09:49.125746+00:00",
+                "message": "Ticket closed: Closed by <@627980371887128606>"
+            },
+            {
+                "timestamp": "2025-04-30T04:09:50.812545+00:00",
+                "message": "[pyroedged (627980371887128606)]: Ticket channel deleted."
+            }
+        ]
+    },
+    "005": {
+        "ticket_id": "005",
+        "user_id": "627980371887128606",
+        "channel_id": "deleted",
+        "subject": "General Ticket \ud83c\udf88 Ticket",
+        "reason": "test",
+        "category": "General Ticket \ud83c\udf88",
+        "ign": {
+            "username": "PyroEdged"
+        },
+        "status": "closed",
+        "created_at": "2025-04-30T04:09:42.318893+00:00",
+        "updated_at": "2025-04-30T04:36:25.149847+00:00",
+        "logs": [
+            {
+                "timestamp": "2025-04-30T04:09:55.277471+00:00",
+                "message": "[pyroedged (627980371887128606)]: Hi"
+            },
+            {
+                "timestamp": "2025-04-30T04:10:04.996127+00:00",
+                "message": "[pyroedged (627980371887128606)]: Theres a bug that isnt fixed"
+            },
+            {
+                "timestamp": "2025-04-30T04:10:28.095597+00:00",
+                "message": "[pyroedged (627980371887128606)]: RTP wont work need a developer, everyone is havin gthe issue, says an internal error occured, not screenshot"
+            },
+            {
+                "timestamp": "2025-04-30T04:10:44.291438+00:00",
+                "message": "[pyroedged (627980371887128606)]: ok"
+            },
+            {
+                "timestamp": "2025-04-30T04:10:48.395711+00:00",
+                "message": "[pyroedged (627980371887128606)]: YES"
+            },
+            {
+                "timestamp": "2025-04-30T04:10:50.525564+00:00",
+                "message": "[pyroedged (627980371887128606)]: IT WORKS"
+            },
+            {
+                "timestamp": "2025-04-30T04:36:23.323352+00:00",
+                "message": "Ticket closed: Closed by <@627980371887128606>"
+            },
+            {
+                "timestamp": "2025-04-30T04:36:25.148849+00:00",
+                "message": "[pyroedged (627980371887128606)]: Ticket channel deleted."
+            }
+        ]
+    },
+    "006": {
+        "ticket_id": "006",
+        "user_id": "627980371887128606",
+        "channel_id": "deleted",
+        "subject": "General Ticket \ud83c\udf88 Ticket",
+        "reason": "test",
+        "category": "General Ticket \ud83c\udf88",
+        "ign": {
+            "username": "PyroEdged"
+        },
+        "status": "closed",
+        "created_at": "2025-04-30T04:36:33.120369+00:00",
+        "updated_at": "2025-04-30T04:38:52.242505+00:00",
+        "logs": [
+            {
+                "timestamp": "2025-04-30T04:36:38.982452+00:00",
+                "message": "[pyroedged (627980371887128606)]: I have a bug"
+            },
+            {
+                "timestamp": "2025-04-30T04:36:49.205510+00:00",
+                "message": "[pyroedged (627980371887128606)]: I can't join the sever"
+            },
+            {
+                "timestamp": "2025-04-30T04:37:06.857149+00:00",
+                "message": "[pyroedged (627980371887128606)]: what are some more ideas?"
+            },
+            {
+                "timestamp": "2025-04-30T04:37:15.765993+00:00",
+                "message": "[pyroedged (627980371887128606)]: Now it works, but im banned?"
+            },
+            {
+                "timestamp": "2025-04-30T04:37:52.725899+00:00",
+                "message": "[pyroedged (627980371887128606)]: damn"
+            },
+            {
+                "timestamp": "2025-04-30T04:38:04.777846+00:00",
+                "message": "[pyroedged (627980371887128606)]: I filled out an appeal pin ga staff"
+            },
+            {
+                "timestamp": "2025-04-30T04:38:20.622256+00:00",
+                "message": "[pyroedged (627980371887128606)]: Theres a bug too, rtp doesnt work, pls ping as taff"
+            },
+            {
+                "timestamp": "2025-04-30T04:38:28.365229+00:00",
+                "message": "[pyroedged (627980371887128606)]: ok"
+            },
+            {
+                "timestamp": "2025-04-30T04:38:33.443180+00:00",
+                "message": "[pyroedged (627980371887128606)]: You never pinged staff"
+            },
+            {
+                "timestamp": "2025-04-30T04:38:50.826363+00:00",
+                "message": "Ticket closed: Closed by <@627980371887128606>"
+            },
+            {
+                "timestamp": "2025-04-30T04:38:52.242505+00:00",
+                "message": "[pyroedged (627980371887128606)]: Ticket channel deleted."
+            }
+        ]
+    }
+}

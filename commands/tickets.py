@@ -1,4 +1,8 @@
 import atexit
+import os
+import json
+
+from discord.ext.commands import cooldown
 from interactions import (
     slash_command,
     slash_option,
@@ -23,7 +27,10 @@ from utils import colors, gptchatter
 # Save tickets on program exit
 atexit.register(ticket_handler.save)
 
+# Initialize the GPT chatter DB (will load existing histories)
 chatter = gptchatter.GPTChatterDB(AppConfig_obj.get_openai_key())
+# Save all chat histories on exit
+atexit.register(chatter.save)
 
 # Define your support staff role ID (replace with your actual role ID)
 SUPPORT_ROLE_ID = 123456789012345678
@@ -60,12 +67,11 @@ async def create_panel(ctx: SlashContext, channel):
     # Create a dropdown menu with ticket options (with emojis).
     dropdown = StringSelectMenu(
         "General Ticket 🎈", "Appeal Ticket 📜", "Report Ticket 📢", "Bug Report Ticket 🐛",
-        custom_id="ticket_select_menu",  # persistent custom_id
+        custom_id="ticket_select_menu",
         placeholder="Select a ticket category",
         min_values=1,
         max_values=1,
     )
-
     await channel.send(
         embed=Embed(
             title="Bonk Network | Support Tickets",
@@ -123,7 +129,8 @@ async def handle_ticket_select(ctx: ComponentContext):
     new_channel = await ctx.guild.create_text_channel(
         name=f"ticket-{ticket_id}",
         category=category_id,
-        permission_overwrites=overwrites
+        permission_overwrites=overwrites,
+        rate_limit_per_user=5
     )
 
     subject = f"{ticket_category} Ticket"
@@ -183,12 +190,14 @@ async def handle_ticket_select(ctx: ComponentContext):
         await ctx.message.edit(components=[new_dropdown])
     except Exception:
         pass
+    chatter.add_user(ticket.ticket_id)
 
 
 @component_callback("close_ticket")
 async def close_ticket_callback(ctx: ComponentContext):
     await ctx.defer(ephemeral=True)
-    ticket = next((t for t in ticket_handler.tickets.values() if t.channel_id == str(ctx.channel.id)), None)
+    ticket = next((t for t in ticket_handler.tickets.values()
+                   if t.channel_id == str(ctx.channel.id)), None)
     if not ticket:
         await ctx.send("Ticket not found.", ephemeral=True)
         return
@@ -243,8 +252,9 @@ async def close_ticket_callback(ctx: ComponentContext):
     )
     await ctx.channel.send(embed=close_embed, components=[action_row])
     await ctx.send("Ticket closed successfully.", ephemeral=True)
-    # Remove the GPT conversation from storage now that the ticket is closed.
-    chatter.delete_user(ticket.ticket_id)
+    chat_obj = chatter.get_user(ticket.ticket_id)
+    if chat_obj and not chat_obj.staff_ping_used:
+        chatter.delete_user(ticket.ticket_id)
 
 
 @component_callback("reopen_ticket")
@@ -259,8 +269,12 @@ async def reopen_ticket_callback(ctx: ComponentContext):
         return
 
     ticket_handler.update_ticket(ticket.ticket_id, status="open")
-    ticket_handler.add_ticket_log_with_user(ticket.ticket_id, str(ctx.author.id), ctx.author.username,
-                                              "Ticket reopened.")
+    ticket_handler.add_ticket_log_with_user(
+        ticket.ticket_id,
+        str(ctx.author.id),
+        ctx.author.username,
+        "Ticket reopened."
+    )
     await ctx.channel.edit(name=f"ticket-{ticket.ticket_id}")
 
     new_overwrites = [
@@ -318,8 +332,12 @@ async def delete_ticket_callback(ctx: ComponentContext):
         await ctx.send("You cannot delete a ticket until it is closed.", ephemeral=True)
         return
 
-    ticket_handler.add_ticket_log_with_user(ticket.ticket_id, str(ctx.author.id), ctx.author.username,
-                                              "Ticket channel deleted.")
+    ticket_handler.add_ticket_log_with_user(
+        ticket.ticket_id,
+        str(ctx.author.id),
+        ctx.author.username,
+        "Ticket channel deleted."
+    )
     ticket_handler.update_ticket(ticket.ticket_id, channel_id="deleted")
     await ctx.channel.delete()
 
@@ -349,7 +367,6 @@ async def log_ticket_message(event):
     # Check if this channel is a ticket channel.
     for ticket in ticket_handler.tickets.values():
         if ticket.channel_id == str(msg.channel.id):
-            # Log the message as before.
             ticket_handler.add_ticket_log_with_user(
                 ticket.ticket_id,
                 str(author.id),
@@ -361,22 +378,24 @@ async def log_ticket_message(event):
                 chat_obj = chatter.get_user(ticket.ticket_id)
                 if not chat_obj:
                     chat_obj = chatter.add_user(ticket.ticket_id)
-                # Trigger typing indicator while generating the GPT response.
-                await msg.channel.trigger_typing()
-                answer = chat_obj.chat_with_gpt(content)
-                try:
-                    await msg.reply(answer)
-                except Exception as e:
-                    print("Error sending GPT reply:", e)
+
+                if not chat_obj.staff_ping_used:
+                    await msg.channel.trigger_typing()
+                    answer = chat_obj.chat_with_gpt(content)
+                    chatter.update_user(ticket.ticket_id)
+                    if answer:
+                        try:
+                            await msg.reply(answer)
+                        except Exception as e:
+                            print("Error sending GPT reply:", e)
             break
 
 
 @slash_command(name="close", description="Close the current ticket")
 async def close_ticket_command(ctx: SlashContext):
     await ctx.defer(ephemeral=True)
-
-    # Find the ticket associated with this channel.
-    ticket = next((t for t in ticket_handler.tickets.values() if t.channel_id == str(ctx.channel_id)), None)
+    ticket = next((t for t in ticket_handler.tickets.values()
+                   if t.channel_id == str(ctx.channel_id)), None)
     if not ticket:
         await ctx.send("Ticket not found in this channel.", ephemeral=True)
         return
@@ -384,7 +403,6 @@ async def close_ticket_command(ctx: SlashContext):
         await ctx.send("This ticket is already closed.", ephemeral=True)
         return
 
-    # Close the ticket and update its channel name.
     ticket_handler.close_ticket(ticket.ticket_id, f"Closed by <@{ctx.author.id}>")
     await ctx.channel.edit(name=f"closed-{ticket.ticket_id}")
 
@@ -434,4 +452,6 @@ async def close_ticket_command(ctx: SlashContext):
     await ctx.channel.send(embed=close_embed, components=[action_row])
     await ctx.send("Ticket closed successfully.", ephemeral=True)
     # Remove the GPT conversation from storage.
-    chatter.delete_user(ticket.ticket_id)
+    chat_obj = chatter.get_user(ticket.ticket_id)
+    if chat_obj and not chat_obj.staff_ping_used:
+        chatter.delete_user(ticket.ticket_id)
