@@ -1,3 +1,4 @@
+# AI-generated code to see what GPT functions look like. This file is just for testing and will be removed.
 from utils.config import AppConfig
 import json
 from openai import OpenAI
