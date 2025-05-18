@@ -1,8 +1,6 @@
 import atexit
-import os
-import json
+from datetime import datetime, timezone, timedelta
 
-from discord.ext.commands import cooldown
 from interactions import (
     slash_command,
     slash_option,
@@ -24,15 +22,15 @@ from interactions import (
 from bot_instance import bot, ticket_handler, AppConfig_obj
 from utils import colors, gptchatter
 
-# Save tickets on program exit
+
+TICKET_COOLDOWN = timedelta(minutes=1)
+SUPPORT_ROLE_MENTION = "<@&1282491372250857676>"
+
 atexit.register(ticket_handler.save)
 
-# Initialize the GPT chatter DB (will load existing histories)
 chatter = gptchatter.GPTChatterDB(AppConfig_obj.get_openai_key())
-# Save all chat histories on exit
 atexit.register(chatter.save)
 
-# Define your support staff role ID (replace with your actual role ID)
 SUPPORT_ROLE_ID = 123456789012345678
 
 
@@ -64,7 +62,6 @@ async def create_panel(ctx: SlashContext, channel):
         "5. **Staff Always Have the Final Say** - Staff decisions are final."
     )
 
-    # Create a dropdown menu with ticket options (with emojis).
     dropdown = StringSelectMenu(
         "General Ticket 🎈", "Appeal Ticket 📜", "Report Ticket 📢", "Bug Report Ticket 🐛",
         custom_id="ticket_select_menu",
@@ -84,10 +81,8 @@ async def create_panel(ctx: SlashContext, channel):
 
 @component_callback("ticket_select_menu")
 async def handle_ticket_select(ctx: ComponentContext):
-    # Save the selected ticket category from the dropdown.
     ticket_category = ctx.values[0]
 
-    # Create and send the modal with a unique custom_id.
     my_modal = Modal(
         ShortText(label="What is your in game name?", custom_id="ign"),
         ParagraphText(label="Why are you making a ticket?", custom_id="reason"),
@@ -95,37 +90,30 @@ async def handle_ticket_select(ctx: ComponentContext):
         custom_id="ticket_modal"
     )
     await ctx.send_modal(modal=my_modal)
-
-    # Wait for the modal submission.
     modal_ctx = await ctx.bot.wait_for_modal(my_modal)
     ign = modal_ctx.responses["ign"]
     reason_input = modal_ctx.responses["reason"]
 
-    # Check if the user already has an open ticket.
     if ticket_handler.has_open_ticket(str(ctx.author.id)):
         await modal_ctx.send("You already have an open ticket.", ephemeral=True)
+
+        reset_dropdown = StringSelectMenu(
+            "General Ticket 🎈", "Appeal Ticket 📜", "Report Ticket 📢", "Bug Report Ticket 🐛",
+            custom_id="ticket_select_menu",
+            placeholder="Select a ticket category",
+            min_values=1,
+            max_values=1
+        )
+        await ctx.message.edit(components=[reset_dropdown])
         return
 
-    # Continue with your ticket creation process using the stored category.
     ticket_id = ticket_handler._generate_ticket_id()
     overwrites = [
-        PermissionOverwrite(
-            id=ctx.guild_id,
-            type=0,
-            deny=Permissions.VIEW_CHANNEL
-        ),
-        PermissionOverwrite(
-            id=ctx.author.id,
-            type=1,
-            allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES
-        ),
-        PermissionOverwrite(
-            id=SUPPORT_ROLE_ID,
-            type=0,
-            allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES
-        )
+        PermissionOverwrite(id=ctx.guild_id, type=0, deny=Permissions.VIEW_CHANNEL),
+        PermissionOverwrite(id=ctx.author.id, type=1, allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES),
+        PermissionOverwrite(id=SUPPORT_ROLE_ID, type=0, allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES)
     ]
-    category_id = 1353874386716725359  # Discord category ID for tickets
+    category_id = 1353874386716725359
     new_channel = await ctx.guild.create_text_channel(
         name=f"ticket-{ticket_id}",
         category=category_id,
@@ -142,8 +130,6 @@ async def handle_ticket_select(ctx: ComponentContext):
         ign_username=ign,
         category=ticket_category
     )
-
-    # Initialize a GPT conversation for this ticket using its ticket id.
     chatter.add_user(ticket.ticket_id)
 
     welcome_embed = Embed(
@@ -151,56 +137,49 @@ async def handle_ticket_select(ctx: ComponentContext):
         description=(
             f"Hello <@{ctx.author.id}>, thank you for contacting support regarding **{ticket_category}**.\n\n"
             f"**In Game Name:** ```{ign}```\n"
-            f"**Ticket Reason:** ```{reason_input}```\n\n"
-            "A member of our team will be with you shortly. Please provide any additional details regarding your issue."
+            f"**Ticket Reason:** ```{reason_input}```"
         ),
-        color=colors.DiscordColors.GREEN,
+        color=colors.DiscordColors.GREEN
     )
-    await new_channel.send(content=f"<@{ctx.author.id}>", embed=welcome_embed)
+    close_button = Button(custom_id="close_ticket", label="Close Ticket", style=ButtonStyle.PRIMARY, emoji="🔒")
+    #delete_button = Button(custom_id="delete_ticket", label="Delete Ticket", style=ButtonStyle.DANGER, emoji="🗑️")
+    buttons_row = ActionRow(close_button)#, delete_button)
+    await new_channel.send(embed=welcome_embed, components=[buttons_row])
 
-    # Send action buttons: Close Ticket and Delete Ticket.
-    close_button = Button(
-        custom_id="close_ticket",
-        label="Close Ticket",
-        style=ButtonStyle.PRIMARY,
-        emoji="🔒"
-    )
-    buttons_row = ActionRow(close_button)
-    await new_channel.send(components=[buttons_row])
-
-    # Use the modal context to send a follow-up message.
     await modal_ctx.send(
         embed=Embed(
             title="Ticket Created",
             description=f"Your ticket for **{ticket_category}** has been created: {new_channel.mention}",
-            color=colors.DiscordColors.GREEN,
+            color=colors.DiscordColors.GREEN
         ),
         ephemeral=True
     )
 
-    # Reset the dropdown on the panel message so users can create more tickets.
     new_dropdown = StringSelectMenu(
         "General Ticket 🎈", "Appeal Ticket 📜", "Report Ticket 📢", "Bug Report Ticket 🐛",
         custom_id="ticket_select_menu",
         placeholder="Select a ticket category",
         min_values=1,
-        max_values=1,
+        max_values=1
     )
-    try:
-        await ctx.message.edit(components=[new_dropdown])
-    except Exception:
-        pass
-    chatter.add_user(ticket.ticket_id)
+    await ctx.message.edit(components=[new_dropdown])
 
 
 @component_callback("close_ticket")
 async def close_ticket_callback(ctx: ComponentContext):
     await ctx.defer(ephemeral=True)
-    ticket = next((t for t in ticket_handler.tickets.values()
-                   if t.channel_id == str(ctx.channel.id)), None)
+    ticket = next((t for t in ticket_handler.tickets.values() if t.channel_id == str(ctx.channel.id)), None)
     if not ticket:
         await ctx.send("Ticket not found.", ephemeral=True)
         return
+    now = datetime.now(timezone.utc)
+    if ticket.last_reopened_at:
+        last_reopen = datetime.fromisoformat(ticket.last_reopened_at)
+        if now - last_reopen < TICKET_COOLDOWN:
+            remaining = TICKET_COOLDOWN - (now - last_reopen)
+            minutes = int(remaining.total_seconds() // 60) + 1
+            await ctx.send(f"You cannot close this ticket so soon. Please wait {minutes} minute(s).", ephemeral=True)
+            return
     if ticket.status == "closed":
         await ctx.send("This ticket is already closed.", ephemeral=True)
         return
@@ -208,42 +187,18 @@ async def close_ticket_callback(ctx: ComponentContext):
     ticket_handler.close_ticket(ticket.ticket_id, f"Closed by <@{ctx.author.id}>")
     await ctx.channel.edit(name=f"closed-{ticket.ticket_id}")
 
-    # Update permission overwrites in one PATCH call.
     new_overwrites = [
-        PermissionOverwrite(
-            id=ctx.guild_id,
-            type=0,
-            deny=Permissions.VIEW_CHANNEL
-        ),
-        PermissionOverwrite(
-            id=ticket.user_id,
-            type=1,
-            allow=Permissions.VIEW_CHANNEL,
-            deny=Permissions.SEND_MESSAGES
-        ),
-        PermissionOverwrite(
-            id=SUPPORT_ROLE_ID,
-            type=0,
-            allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES
-        )
+        PermissionOverwrite(id=ctx.guild_id, type=0, deny=Permissions.VIEW_CHANNEL),
+        PermissionOverwrite(id=ticket.user_id, type=1, allow=Permissions.VIEW_CHANNEL, deny=Permissions.SEND_MESSAGES),
+        PermissionOverwrite(id=SUPPORT_ROLE_ID, type=0, allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES)
     ]
     try:
         await ctx.channel.edit(permission_overwrites=new_overwrites)
     except Exception as e:
         print("Error updating permissions:", e)
 
-    reopen_button = Button(
-        custom_id="reopen_ticket",
-        label="Reopen Ticket",
-        style=ButtonStyle.PRIMARY,
-        emoji="🔓"
-    )
-    delete_button = Button(
-        custom_id="delete_ticket",
-        label="Delete Ticket",
-        style=ButtonStyle.DANGER,
-        emoji="🗑️"
-    )
+    reopen_button = Button(custom_id="reopen_ticket", label="Reopen Ticket", style=ButtonStyle.PRIMARY, emoji="🔓")
+    delete_button = Button(custom_id="delete_ticket", label="Delete Ticket", style=ButtonStyle.DANGER, emoji="🗑️")
     action_row = ActionRow(reopen_button, delete_button)
     close_embed = Embed(
         title="Ticket Closed",
@@ -264,6 +219,14 @@ async def reopen_ticket_callback(ctx: ComponentContext):
     if not ticket:
         await ctx.send("Ticket not found.", ephemeral=True)
         return
+    now = datetime.now(timezone.utc)
+    if ticket.last_closed_at:
+        last_close = datetime.fromisoformat(ticket.last_closed_at)
+        if now - last_close < TICKET_COOLDOWN:
+            remaining = TICKET_COOLDOWN - (now - last_close)
+            minutes = int(remaining.total_seconds() // 60) + 1
+            await ctx.send(f"You cannot reopen this ticket so soon. Please wait {minutes} minute(s).", ephemeral=True)
+            return
     if ticket.status != "closed":
         await ctx.send("This ticket is not closed.", ephemeral=True)
         return
@@ -278,39 +241,17 @@ async def reopen_ticket_callback(ctx: ComponentContext):
     await ctx.channel.edit(name=f"ticket-{ticket.ticket_id}")
 
     new_overwrites = [
-        PermissionOverwrite(
-            id=ctx.guild_id,
-            type=0,
-            deny=Permissions.VIEW_CHANNEL
-        ),
-        PermissionOverwrite(
-            id=ticket.user_id,
-            type=1,
-            allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES
-        ),
-        PermissionOverwrite(
-            id=SUPPORT_ROLE_ID,
-            type=0,
-            allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES
-        )
+        PermissionOverwrite(id=ctx.guild_id, type=0, deny=Permissions.VIEW_CHANNEL),
+        PermissionOverwrite(id=ticket.user_id, type=1, allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES),
+        PermissionOverwrite(id=SUPPORT_ROLE_ID, type=0, allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES)
     ]
     try:
         await ctx.channel.edit(permission_overwrites=new_overwrites)
     except Exception as e:
         print("Error updating permissions on reopen:", e)
 
-    close_button = Button(
-        custom_id="close_ticket",
-        label="Close Ticket",
-        style=ButtonStyle.PRIMARY,
-        emoji="🔒"
-    )
-    delete_button = Button(
-        custom_id="delete_ticket",
-        label="Delete Ticket",
-        style=ButtonStyle.DANGER,
-        emoji="🗑️"
-    )
+    close_button = Button(custom_id="close_ticket", label="Close Ticket", style=ButtonStyle.PRIMARY, emoji="🔒")
+    delete_button = Button(custom_id="delete_ticket", label="Delete Ticket", style=ButtonStyle.DANGER, emoji="🗑️")
     buttons_row = ActionRow(close_button, delete_button)
     reopen_embed = Embed(
         title="Ticket Reopened",
@@ -342,11 +283,9 @@ async def delete_ticket_callback(ctx: ComponentContext):
     await ctx.channel.delete()
 
 
-# Event listener to log every user message in ticket channels and interact with GPT.
 @bot.listen("on_message_create")
 async def log_ticket_message(event):
     msg = event.message
-    # Determine message content.
     content = ""
     if hasattr(msg, "content") and msg.content:
         content = msg.content
@@ -359,12 +298,10 @@ async def log_ticket_message(event):
         else:
             content = "[No message content]"
 
-    # Get the author; ignore bot messages.
     author = getattr(msg, "author", None) or msg.member
     if not author or getattr(author, "bot", False):
         return
 
-    # Check if this channel is a ticket channel.
     for ticket in ticket_handler.tickets.values():
         if ticket.channel_id == str(msg.channel.id):
             ticket_handler.add_ticket_log_with_user(
@@ -373,7 +310,6 @@ async def log_ticket_message(event):
                 author.username,
                 content
             )
-            # If the message is from the ticket owner and the ticket is open, call GPT.
             if ticket.user_id == str(author.id) and ticket.status == "open":
                 chat_obj = chatter.get_user(ticket.ticket_id)
                 if not chat_obj:
@@ -385,20 +321,56 @@ async def log_ticket_message(event):
                     chatter.update_user(ticket.ticket_id)
                     if answer:
                         try:
-                            await msg.reply(answer)
+                            talk_button = Button(
+                                custom_id="talk_to_human",
+                                label="Talk to a Human",
+                                style=ButtonStyle.SECONDARY
+                            )
+                            action_row = ActionRow(talk_button)
+                            await msg.reply(answer, components=[action_row])
                         except Exception as e:
                             print("Error sending GPT reply:", e)
             break
 
+@component_callback("talk_to_human")
+async def talk_to_human_callback(ctx: ComponentContext):
+    await ctx.defer(ephemeral=True)
+
+    ticket = next(
+        (t for t in ticket_handler.tickets.values() if t.channel_id == str(ctx.channel.id)),
+        None
+    )
+    if not ticket:
+        await ctx.send("Ticket not found.", ephemeral=True)
+        return
+
+    chat_obj = chatter.get_user(ticket.ticket_id)
+    if chat_obj and not chat_obj.staff_ping_used:
+        chat_obj.staff_ping_used = True
+        chatter.update_user(ticket.ticket_id)
+
+        await ctx.channel.send(
+            f"{SUPPORT_ROLE_MENTION}, {ctx.author.mention} has asked to talk to a human!"
+        )
+        await ctx.send("A human has been notified and will be with you shortly.", ephemeral=True)
+    else:
+        await ctx.send("You’ve already requested a human. Please wait for staff to join you.", ephemeral=True)
 
 @slash_command(name="close", description="Close the current ticket")
 async def close_ticket_command(ctx: SlashContext):
     await ctx.defer(ephemeral=True)
-    ticket = next((t for t in ticket_handler.tickets.values()
-                   if t.channel_id == str(ctx.channel_id)), None)
+    ticket = next((t for t in ticket_handler.tickets.values() if t.channel_id == str(ctx.channel_id)), None)
     if not ticket:
         await ctx.send("Ticket not found in this channel.", ephemeral=True)
         return
+    now = datetime.now(timezone.utc)
+    if ticket.last_reopened_at:
+        last_reopen = datetime.fromisoformat(ticket.last_reopened_at)
+        if now - last_reopen < TICKET_COOLDOWN:
+            remaining = TICKET_COOLDOWN - (now - last_reopen)
+            minutes = int(remaining.total_seconds() // 60) + 1
+            await ctx.send(f"You cannot close this ticket so soon. Please wait {minutes} minute(s).", ephemeral=True)
+            return
     if ticket.status == "closed":
         await ctx.send("This ticket is already closed.", ephemeral=True)
         return
@@ -406,43 +378,18 @@ async def close_ticket_command(ctx: SlashContext):
     ticket_handler.close_ticket(ticket.ticket_id, f"Closed by <@{ctx.author.id}>")
     await ctx.channel.edit(name=f"closed-{ticket.ticket_id}")
 
-    # Update permission overwrites in one PATCH call.
     new_overwrites = [
-        PermissionOverwrite(
-            id=ctx.guild_id,
-            type=0,  # Role (@everyone)
-            deny=Permissions.VIEW_CHANNEL
-        ),
-        PermissionOverwrite(
-            id=ticket.user_id,
-            type=1,  # Member
-            allow=Permissions.VIEW_CHANNEL,
-            deny=Permissions.SEND_MESSAGES
-        ),
-        PermissionOverwrite(
-            id=SUPPORT_ROLE_ID,
-            type=0,  # Role (Support staff)
-            allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES
-        )
+        PermissionOverwrite(id=ctx.guild_id, type=0, deny=Permissions.VIEW_CHANNEL),
+        PermissionOverwrite(id=ticket.user_id, type=1, allow=Permissions.VIEW_CHANNEL, deny=Permissions.SEND_MESSAGES),
+        PermissionOverwrite(id=SUPPORT_ROLE_ID, type=0, allow=Permissions.VIEW_CHANNEL | Permissions.SEND_MESSAGES)
     ]
     try:
         await ctx.channel.edit(permission_overwrites=new_overwrites)
     except Exception as e:
         print("Error updating permissions:", e)
 
-    # Send a message with buttons to allow reopening or deleting the ticket.
-    reopen_button = Button(
-        custom_id="reopen_ticket",
-        label="Reopen Ticket",
-        style=ButtonStyle.PRIMARY,
-        emoji="🔓"
-    )
-    delete_button = Button(
-        custom_id="delete_ticket",
-        label="Delete Ticket",
-        style=ButtonStyle.DANGER,
-        emoji="🗑️"
-    )
+    reopen_button = Button(custom_id="reopen_ticket", label="Reopen Ticket", style=ButtonStyle.PRIMARY, emoji="🔓")
+    delete_button = Button(custom_id="delete_ticket", label="Delete Ticket", style=ButtonStyle.DANGER, emoji="🗑️")
     action_row = ActionRow(reopen_button, delete_button)
     close_embed = Embed(
         title="Ticket Closed",
@@ -451,7 +398,6 @@ async def close_ticket_command(ctx: SlashContext):
     )
     await ctx.channel.send(embed=close_embed, components=[action_row])
     await ctx.send("Ticket closed successfully.", ephemeral=True)
-    # Remove the GPT conversation from storage.
     chat_obj = chatter.get_user(ticket.ticket_id)
     if chat_obj and not chat_obj.staff_ping_used:
         chatter.delete_user(ticket.ticket_id)

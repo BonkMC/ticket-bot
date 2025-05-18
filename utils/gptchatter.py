@@ -1,7 +1,7 @@
-# gptchatter.py
-
 from openai import OpenAI
 import json, os
+
+from utils.gptfunctions import query_minecraft_server
 
 GPT_DEFAULT_SYSTEM_PROMPT = (
     "You are the official Discord ticket support assistant for **Bonk Network**, a Minecraft Java Edition server. "
@@ -14,7 +14,7 @@ GPT_DEFAULT_SYSTEM_PROMPT = (
     "# 🎮 Server Info:\n"
     "- IP: `play.bonkmc.net`\n"
     "- Version: **Java and Bedrock Edition**\n"
-    "- ❌ Not whitelisted | ❌ Not modded | Is cracked\n"
+    "- ❌ Not whitelisted | ❌ Not modded | ✅ Is cracked\n"
 
     "# ✅ Your Responsibilities:\n"
     "- Help with Minecraft server connection issues\n"
@@ -28,13 +28,23 @@ GPT_DEFAULT_SYSTEM_PROMPT = (
     "- What they were doing when it happened\n"
     "- Whether it’s reproducible\n"
     "- Any error messages or screenshots\n"
+    "- Their Minecraft version\n"
+    "If the user says the server is down, or they think the server is down for everyone, or something similar, "
+    "call the function query_minecraft_server to check. If there are 0 people online, or the server itself is "
+    "offline, immediately ping staff.\n"
 
     "# 🛠️ Troubleshooting Tips:\n"
     "If the user has connection or login issues, suggest they try:\n"
     "- Restarting Minecraft and their launcher\n"
     "- Ensuring version is set to the latest compatible one\n"
     "- Using direct IP: `play.bonkmc.net`\n"
-    "- Disabling VPN/firewall temporarily\n"
+    "- Disabling client modifications\n"
+    "- Checking internet connection\n"
+    "- And more ideas up to your description.\n"
+    "If the user says they still can not join, use the query_minecraft_server function to check. If there are 0 people online, or the server itself is "
+    "offline, immediately ping staff.\n"
+    "# 🔄 User Follow-Up:\n"
+    "- If the user after 2 attempts still can not join, use other methods you know.\n"
 
     "# ⚠️ Staff Escalation:\n"
     "- Do **not** ping staff immediately. First, **listen carefully**, ask necessary follow-up questions, and make sure you understand the issue.\n"
@@ -54,48 +64,94 @@ GPT_DEFAULT_SYSTEM_PROMPT = (
     "- If a user is banned, inform them that they can appeal their ban at https://appeal.gg/bonknetwork . Do not "
     "provide any further details, and be very strict towards the user since it it completely their fault most of the "
     "time. Assume the worst for their intentions.\n"
-    "or assistance.\n"
 
-    "🔁 Always assume the user is telling the truth about their experience unless proven otherwise. Respect their time, avoid repeating advice, and be as clear as possible.\n"
+    "🔁 Always assume the user is telling the truth about their experience unless proven otherwise, or a banned user. "
+    "Respect their time, avoid repeating advice, and be as clear as possible.\n"
     "✅ Your goal is to help, escalate when necessary, and keep things efficient and user-friendly."
 )
 
 class Chat:
     def __init__(self, key, messages=None):
-        # Restore full history if provided, else start with system prompt
-        self.messages = messages if messages is not None else [
-            {"role": "system", "content": GPT_DEFAULT_SYSTEM_PROMPT}
-        ]
-        # Detect if a staff ping already occurred in past assistant messages
+        if messages is not None:
+            clean = []
+            for m in messages:
+                if "content" in m and m["content"] is None:
+                    continue
+                clean.append(m)
+            self.messages = clean
+        else:
+            self.messages = [
+                {"role": "system", "content": GPT_DEFAULT_SYSTEM_PROMPT}
+            ]
+
         self.staff_ping_used = any(
-            msg["role"] == "assistant" and "<@&" in msg["content"]
-            for msg in self.messages
+            m.get("role") == "assistant"
+            and isinstance(m.get("content"), str)
+            and "<@&" in m["content"]
+            for m in self.messages
         )
         self.client = OpenAI(api_key=key)
 
     def chat_with_gpt(self, prompt):
-        # If we've already escalated (pinged staff), do nothing further
         if self.staff_ping_used:
             return None
 
-        # Record the user's message
         self.messages.append({"role": "user", "content": prompt})
 
-        # Send full history to GPT
-        response = self.client.chat.completions.create(
+        functions = [{
+            "name": "query_minecraft_server",
+            "description": "Get the current status of Bonk Network's Minecraft server.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": [
+                            "java_status"
+                        ]
+                    }
+                }
+            }
+        }]
+
+        resp = self.client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=self.messages
+            messages=self.messages,
+            functions=functions,
+            function_call="auto"
         )
-        answer = response.choices[0].message.content
+        msg = resp.choices[0].message
 
-        # Record GPT's reply
-        self.messages.append({"role": "assistant", "content": answer})
+        if msg.function_call:
+            self.messages.append({
+                "role": "assistant",
+                "name": msg.function_call.name,
+                "function_call": {
+                    "name": msg.function_call.name,
+                    "arguments": msg.function_call.arguments
+                }
+            })
 
-        # If GPT included a staff ping (<@&...>), mark escalation so it won't ping again
-        if "<@&" in answer:
-            self.staff_ping_used = True
+            args = json.loads(msg.function_call.arguments)
+            result = query_minecraft_server(**args)
 
-        return answer
+            self.messages.append({
+                "role": "function",
+                "name": msg.function_call.name,
+                "content": result
+            })
+
+            followup = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=self.messages
+            )
+            final_msg = followup.choices[0].message.content
+            self.messages.append({"role": "assistant", "content": final_msg})
+            return final_msg
+
+        content = msg.content
+        self.messages.append({"role": "assistant", "content": content})
+        return content
 
 
 class GPTChatterDB:
@@ -103,15 +159,12 @@ class GPTChatterDB:
         self.key = key
         self.db_file = db_file
 
-        # Ensure the directory exists
         os.makedirs(os.path.dirname(self.db_file), exist_ok=True)
 
-        # In-memory map: user_id -> Chat instance
         self.chat_objs = {}
         self.load()
 
     def load(self):
-        """Load all saved message histories and rebuild Chat instances."""
         try:
             with open(self.db_file, "r") as f:
                 chat_data = json.load(f)
@@ -123,7 +176,6 @@ class GPTChatterDB:
             self.chat_objs[user] = Chat(self.key, messages=messages)
 
     def save(self):
-        """Persist every Chat.messages to disk."""
         to_save = {
             user: chat.messages for user, chat in self.chat_objs.items()
         }
@@ -131,7 +183,6 @@ class GPTChatterDB:
             json.dump(to_save, f, indent=4)
 
     def add_user(self, user):
-        """Start a new chat (system prompt only) if one doesn't exist."""
         if user in self.chat_objs:
             return self.chat_objs[user]
         chat_obj = Chat(self.key)
@@ -140,16 +191,13 @@ class GPTChatterDB:
         return chat_obj
 
     def get_user(self, user):
-        """Return the Chat for a user, or None if not present."""
         return self.chat_objs.get(user)
 
     def update_user(self, user):
-        """Call after chat.messages has been updated to persist changes."""
         if user in self.chat_objs:
             self.save()
 
     def delete_user(self, user):
-        """Remove a chat history completely."""
         if user in self.chat_objs:
             del self.chat_objs[user]
             self.save()

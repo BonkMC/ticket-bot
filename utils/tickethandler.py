@@ -31,6 +31,8 @@ class Ticket:
         created_at: str = None,
         updated_at: str = None,
         logs: list = None,
+        last_closed_at: str = None,
+        last_reopened_at: str = None,
     ):
         self.ticket_id = ticket_id
         self.user_id = user_id
@@ -43,6 +45,8 @@ class Ticket:
         self.created_at = created_at or datetime.now(timezone.utc).isoformat()
         self.updated_at = updated_at or datetime.now(timezone.utc).isoformat()
         self.logs = logs if logs is not None else []
+        self.last_closed_at = last_closed_at
+        self.last_reopened_at = last_reopened_at
 
     def to_dict(self) -> dict:
         return {
@@ -57,6 +61,8 @@ class Ticket:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "logs": self.logs,
+            "last_closed_at": self.last_closed_at,
+            "last_reopened_at": self.last_reopened_at,
         }
 
     @classmethod
@@ -75,6 +81,8 @@ class Ticket:
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             logs=data.get("logs", []),
+            last_closed_at=data.get("last_closed_at"),
+            last_reopened_at=data.get("last_reopened_at"),
         )
 
     def add_log(self, message: str):
@@ -142,12 +150,15 @@ class TicketHandler:
     def update_ticket(self, ticket_id: str, **kwargs) -> Ticket:
         ticket = self.tickets.get(ticket_id)
         if ticket:
+            old_status = ticket.status
             for key, value in kwargs.items():
                 if key == "ign" and isinstance(value, str):
                     setattr(ticket, key, IGN(value))
                 elif hasattr(ticket, key):
                     setattr(ticket, key, value)
             ticket.updated_at = datetime.now(timezone.utc).isoformat()
+            if 'status' in kwargs and kwargs['status'] == "open" and old_status != "open":
+                ticket.last_reopened_at = ticket.updated_at
             self.save()
         return ticket
 
@@ -170,25 +181,20 @@ class TicketHandler:
                 ticket.add_log(f"Ticket closed: {closing_message}")
             else:
                 ticket.add_log("Ticket closed.")
+            ticket.last_closed_at = datetime.now(timezone.utc).isoformat()
             self.save()
         return ticket
-
-    def get_ticket(self, ticket_id: str) -> Ticket:
-        return self.tickets.get(ticket_id)
 
     def list_tickets(self) -> list:
         return list(self.tickets.values())
 
-    # NEW: Helper method to check if a user already has an open ticket.
     def has_open_ticket(self, user_id: str) -> bool:
         return any(ticket.user_id == user_id and ticket.status == "open" for ticket in self.tickets.values())
 
 
-# Example usage:
 if __name__ == "__main__":
     handler = TicketHandler("data/tickets.json")
 
-    # Create a new ticket with category "Bug Report"
     new_ticket = handler.create_ticket(
         user_id="123456789",
         channel_id="987654321",
@@ -199,12 +205,9 @@ if __name__ == "__main__":
     )
     print("New ticket created:", new_ticket.to_dict())
 
-    # Add a log entry to the ticket using add_ticket_log_with_user.
     handler.add_ticket_log_with_user(new_ticket.ticket_id, "123456789", "ExampleUser", "Initial troubleshooting started.")
 
-    # Close the ticket with a closing message.
     handler.close_ticket(new_ticket.ticket_id, "Issue resolved.")
 
-    # List all tickets.
     for ticket in handler.list_tickets():
         print(ticket.to_dict())
