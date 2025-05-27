@@ -45,7 +45,7 @@ class Ticket:
         self.created_at = created_at or datetime.now(timezone.utc).isoformat()
         self.updated_at = updated_at or datetime.now(timezone.utc).isoformat()
         self.logs = logs if logs is not None else []
-       self.last_closed_at = last_closed_at
+        self.last_closed_at = last_closed_at
         self.last_reopened_at = last_reopened_at
 
     def to_dict(self) -> dict:

@@ -23,7 +23,7 @@ from bot_instance import bot, ticket_handler, AppConfig_obj
 from utils import colors, gptchatter
 
 
-TICKET_COOLDOWN = timedelta(minutes=1)
+TICKET_COOLDOWN = timedelta(seconds=30)
 SUPPORT_ROLE_MENTION = "<@&1282491372250857676>"
 
 atexit.register(ticket_handler.save)
